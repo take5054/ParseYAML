@@ -1,0 +1,108 @@
+# いろんな要素が混ざったYAML複雑テストデータ
+users:
+  - id: 1
+    name: "Alice"
+    active: true
+    tags: [admin, tester, "日本語タグ"]
+    profile:
+      age: 32
+      address:
+        city: "Tokyo"
+        zip: "100-0001"
+    projects:
+      - name: "YAML Parser"
+        roles: ["dev", "doc"]
+      - name: "AI Bot"
+        roles: []
+    memo: null
+  - id: 2
+    name: "Bob"
+    active: false
+    tags: []
+    profile:
+      age: 28
+      address: null
+    projects: []
+    memo: ""
+  - id: 3
+    name: null
+    active: true
+    tags:
+      - "special"
+      - "guest"
+    profile: ~
+    projects:
+      - name: "Test"
+        roles:
+          - "reviewer"
+    memo: "改行も\n入る"
+
+settings:
+  theme: "dark"
+  languages:
+    - "en"
+    - "ja"
+    - "zh"
+  notifications:
+    email: true
+    sms: false
+    push: true
+  advanced:
+    retry: 3
+    features:
+      beta: true
+      legacy: false
+
+empty_list: []
+empty_map: {}
+
+matrix:
+  - [1, 2, 3]
+  - [4, 5, 6]
+  - [7, 8, 9]
+
+deep_nest:
+  level1:
+    level2:
+      level3:
+        level4: "ここまで深くなる"
+
+mixed:
+  - just_scalar
+  - [1, 2, 3]
+  - {foo: "bar", baz: 42}
+  - 
+    - nested_list1
+    - nested_list2
+  - 
+    submap: 
+      - sublistitem1
+      - sublistitem2
+  - null
+  - ~
+  - ""
+
+special_cases:
+  colon_in_string: "value:with:colon"
+  hash_in_string: "value#notacomment"
+  quoted_number: "0123"
+  multiline: |
+    これは
+    複数行
+    テキストだよ
+  folded: >
+    これは
+    折りたたみ
+    テキストだよ
+
+anchors_and_aliases:
+  defaults: &defaults
+    color: blue
+    size: L
+  product1:
+    <<: *defaults
+    price: 1200
+  product2:
+    <<: *defaults
+    color: red
+    price: 1500
