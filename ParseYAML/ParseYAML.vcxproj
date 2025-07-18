@@ -130,6 +130,9 @@
   <ItemGroup>
     <ClInclude Include="YAMLParser.hpp" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="ComplicatedTestData.yaml" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

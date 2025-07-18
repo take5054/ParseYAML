@@ -4,6 +4,7 @@
 #include <iostream>
 #include <string>
 #include <Windows.h>
+#include <crtdbg.h>
 
 std::string Convert_UTF8_To_ShiftJIS(const std::string_view& In_Source)
 {
@@ -22,6 +23,9 @@ std::string Convert_UTF8_To_ShiftJIS(const std::string_view& In_Source)
 
 int main()
 {
+    // メモリリーク検出
+	_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF | _CRTDBG_CHECK_ALWAYS_DF);
+
     // ファイル名を指定
     const std::string filename = "ComplicatedTestData.yaml";
 
@@ -42,6 +46,8 @@ int main()
 
     auto node = ParseYAML(yamldata);
     Print_YAML(node, 0);
+	std::cout << "YAMLの解析が完了しました。" << std::endl;
+	node.reset();
 
     return 0;
 }
