@@ -8,10 +8,10 @@ int main()
 	_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF | _CRTDBG_CHECK_ALWAYS_DF);
 
 	// ファイル名を指定してYAMLを解析
-	auto node = ParseYAML("ComplicatedTestData.yaml");
-	Print_YAML(node, 0);
+	auto root = YAMLParser::ParseYAML("ComplicatedTestData.yaml");
+	YAMLParser::Print_YAML(root);
 	std::cout << "YAMLの解析が完了しました。" << std::endl;
-	node.reset();
+	root.reset();
 
 	return 0;
 }
