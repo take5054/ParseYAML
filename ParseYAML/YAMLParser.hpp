@@ -3,6 +3,7 @@
 #include <Windows.h>
 #include <algorithm>
 #include <cctype>
+#include <charconv>
 #include <fstream>
 #include <iostream>
 #include <memory>
@@ -38,15 +39,19 @@ public:
 		std::variant<YAMLScalar, YAMLSeq, YAMLMap> value;
 	};
 
-	static inline std::shared_ptr<YAMLNode> ParseYAML(_In_ const std::string& In_FilePath)
+	/// <summary>
+	/// 指定されたファイルパスからYAMLファイルを読み込み、パースします。
+	/// </summary>
+	/// <param name="In_FilePath">読み込むYAMLファイルのパス。</param>
+	inline void ParseYAML(_In_ const std::string& In_FilePath)
 	{
-		if (In_FilePath.empty()) return std::make_shared<YAMLNode>(YAMLMap{});
+		if (In_FilePath.empty()) return;
 
 		std::ifstream ifs(In_FilePath, std::ios::binary);
 		if (!ifs)
 		{
 			std::cerr << "ファイルを開けません: " << In_FilePath << std::endl;
-			return std::make_shared<YAMLNode>(YAMLMap{});
+			return;
 		}
 
 		// データの読み込み
@@ -96,9 +101,195 @@ public:
 			}
 			topMap[key] = std::make_shared<YAMLNode>(TrimLeftWhitespace(trimmed.substr(colon_pos + 1)));
 		}
-		return std::make_shared<YAMLNode>(topMap);
+		m_YAMLData = YAMLNode(topMap);
 	}
 
+	/// <summary>
+	/// YAMLデータを取得します。
+	/// </summary>
+	/// <returns>メンバー変数m_YAMLDataの値を返します。</returns>
+	inline YAMLNode GetYAMLData() const noexcept { return m_YAMLData; }
+
+	/// <summary>
+	/// キーパスで文字列値を取得
+	/// </summary>
+	/// <param name="In_keyPath">YAML内のキーのパス（ドット区切り）。例: "users.0.name"</param>
+	/// <param name="In_IncludeQuotes">文字列の前後に引用符を含めるかどうか。デフォルトはfalse。</param>
+	/// <returns>指定されたキーの値を文字列として返します。キーが存在しない場合は空文字列を返します。</returns>
+	inline std::string GetString(_In_ const std::string& In_keyPath, _In_ const bool& In_IncludeQuotes = false) const
+	{
+		const YAMLScalar* val = FindScalarByPath(In_keyPath);
+		if (!val) return "";
+		if (In_IncludeQuotes) return *val;
+
+		std::string result = *val;
+		// 前後の空白・改行を削除
+		result.erase(0, result.find_first_not_of(" \t\n\r"));
+		result.erase(result.find_last_not_of(" \t\n\r") + 1);
+		// 文字列の整形
+		if (!result.empty() && result.front() == '"' && result.back() == '"')
+			result = result.substr(1, result.size() - 2);
+		else if (!result.empty() && result.front() == '\'' && result.back() == '\'')
+			result = result.substr(1, result.size() - 2);
+
+		return result;
+	}
+
+	/// <summary>
+	/// キーパスでboolを取得
+	/// </summary>
+	/// <param name="In_keyPath">YAML内のキーのパス（ドット区切り）。例: "users.0.name"</param>
+	/// <returns>指定されたキーの値をboolとして返します。キーが存在しない場合はfalseを返します。</returns>
+	inline bool GetBool(_In_ const std::string& In_keyPath) const
+	{
+		const YAMLScalar* val = FindScalarByPath(In_keyPath);
+		if (!val) return false;
+		return (*val == "true" || *val == "True" || *val == "1");
+	}
+
+	/// <summary>
+	/// キーパスでintを取得
+	/// </summary>
+	/// <param name="In_keyPath">YAML内のキーのパス（ドット区切り）。例: "users.0.age"</param>
+	/// <returns>指定されたキーの値をintとして返します。変換に失敗した場合は0を返します。</returns>
+	inline int GetInt(_In_ const std::string& In_keyPath) const
+	{
+		const YAMLScalar* val = FindScalarByPath(In_keyPath);
+		if (!val) return 0;
+		int value = 0;
+		auto [ptr, ec] = std::from_chars(val->data(), val->data() + val->size(), value, 10);
+		if (ec == std::errc()) return value;
+		else
+		{
+			std::cerr << "整数変換失敗: " << *val << std::endl;
+			return 0;
+		}
+	}
+
+	/// <summary>
+	/// キーパスでfloatを取得
+	/// </summary>
+	/// <param name="In_keyPath">YAML内のキーのパス（ドット区切り）。例: "users.0.height"</param>
+	/// <returns>指定されたキーの値をfloatとして返します。変換に失敗した場合は0.0fを返します。</returns>
+	inline float GetFloat(_In_ const std::string& In_keyPath) const
+	{
+		const YAMLScalar* val = FindScalarByPath(In_keyPath);
+		if (!val) return 0.0f;
+		try
+		{
+			return std::stof(*val);
+		}
+		catch (const std::invalid_argument& e)
+		{
+			std::cerr << "浮動小数点数変換失敗: " << e.what() << std::endl;
+		}
+		catch (const std::out_of_range& e)
+		{
+			std::cerr << "浮動小数点数範囲外: " << e.what() << std::endl;
+		}
+		return 0.0f;
+	}
+
+	/// <summary>
+	/// キーパスでdoubleを取得
+	/// </summary>
+	/// <param name="In_keyPath">YAML内のキーのパス（ドット区切り）。例: "users.0.weight"</param>
+	/// <returns>指定されたキーの値をdoubleとして返します。変換に失敗した場合は0.0を返します。</returns>
+	inline double GetDouble(_In_ const std::string& In_keyPath) const
+	{
+		const YAMLScalar* val = FindScalarByPath(In_keyPath);
+		if (!val) return 0.0;
+		try
+		{
+			return std::stod(*val);
+		}
+		catch (const std::invalid_argument& e)
+		{
+			std::cerr << "浮動小数点数変換失敗: " << e.what() << std::endl;
+		}
+		catch (const std::out_of_range& e)
+		{
+			std::cerr << "浮動小数点数範囲外: " << e.what() << std::endl;
+		}
+		return 0.0;
+	}
+
+	/// <summary>
+	/// YAMLノードの内容をインデント付きで標準出力に表示します。
+	/// </summary>
+	/// <param name="In_IndentDepth">出力時のインデント幅（スペース数）。デフォルトは0です。</param>
+	inline void Print_YAML(_In_ const int& In_IndentDepth = 0) const noexcept
+	{
+		const std::string strIndent(In_IndentDepth, ' ');
+
+		switch (m_YAMLData.type)
+		{
+		case YAMLNode::Type::Scalar:
+			std::cout << strIndent << std::get<YAMLScalar>(m_YAMLData.value) << "\n";
+			break;
+		case YAMLNode::Type::Sequence:
+			for (const auto& seqNode : std::get<YAMLSeq>(m_YAMLData.value))
+			{
+				switch (seqNode->type)
+				{
+				case YAMLNode::Type::Scalar:
+					std::cout << strIndent << "- ";
+					Print_YAML(seqNode, 0);
+					break;
+				case YAMLNode::Type::Sequence:
+					std::cout << strIndent << "- \n";
+					Print_YAML(seqNode, In_IndentDepth + 2);
+					break;
+				case YAMLNode::Type::Map:
+					std::cout << strIndent << "- \n";
+					for (const auto& kv : std::get<YAMLMap>(seqNode->value))
+					{
+						std::cout << strIndent << "  " << kv.first << ":";
+						if (kv.second->type == YAMLNode::Type::Scalar)
+						{
+							std::cout << " " << std::get<YAMLScalar>(kv.second->value) << "\n";
+						}
+						else
+						{
+							std::cout << "\n";
+							Print_YAML(kv.second, In_IndentDepth + 4);
+						}
+					}
+					break;
+				default:
+					break;
+				}
+			}
+			break;
+		case YAMLNode::Type::Map:
+			for (const auto& keyValue : std::get<YAMLMap>(m_YAMLData.value))
+			{
+				std::cout << strIndent << keyValue.first << ":";
+				if (keyValue.second->type == YAMLNode::Type::Scalar)
+				{
+					std::cout << " " << std::get<YAMLScalar>(keyValue.second->value) << "\n";
+				}
+				else
+				{
+					std::cout << "\n";
+					Print_YAML(keyValue.second, In_IndentDepth + 2);
+				}
+			}
+			break;
+		default:
+			break;
+		}
+	}
+
+private:
+
+	YAMLNode m_YAMLData = YAMLNode(YAMLMap{});
+
+	/// <summary>
+	/// YAMLノードを標準出力にインデント付きで再帰的に表示します。
+	/// </summary>
+	/// <param name="In_Node">表示するYAMLノードへの共有ポインタ。</param>
+	/// <param name="In_IndentDepth">現在のインデント幅（スペース数）。デフォルトは0。</param>
 	static inline void Print_YAML(_In_ const std::shared_ptr<YAMLNode>& In_Node, _In_ const int& In_IndentDepth = 0)
 	{
 		if (!In_Node) return;
@@ -163,7 +354,44 @@ public:
 		}
 	}
 
-private:
+	inline const YAMLScalar* FindScalarByPath(_In_ const std::string& In_KeyPath) const
+	{
+		const YAMLNode* node = &m_YAMLData;
+		size_t pos = 0, next;
+		while (pos < In_KeyPath.size())
+		{
+			next = In_KeyPath.find('.', pos);
+			const std::string token = In_KeyPath.substr(pos, next == std::string::npos ? std::string::npos : next - pos);
+
+			if (node->type == YAMLNode::Type::Map)
+			{
+				const auto& map = std::get<YAMLMap>(node->value);
+				auto itr = map.find(token);
+				if (itr == map.end()) return nullptr;
+				node = itr->second.get();
+			}
+			else if (node->type == YAMLNode::Type::Sequence)
+			{
+				if (!std::all_of(token.begin(), token.end(), ::isdigit)) return nullptr;
+				const size_t idx = std::stoul(token);
+				const auto& seq = std::get<YAMLSeq>(node->value);
+				if (idx >= seq.size()) return nullptr;
+				node = seq[idx].get();
+			}
+			else
+			{
+				return nullptr;
+			}
+			if (next == std::string::npos) break;
+			pos = next + 1;
+		}
+		if (node->type == YAMLNode::Type::Scalar)
+		{
+			return &std::get<YAMLScalar>(node->value);
+		}
+		return nullptr;
+	}
+
 	struct YAMLLines
 	{
 		std::vector<std::string> lines;
