@@ -21,15 +21,19 @@ public:
 	using YAMLSeq = std::vector<std::shared_ptr<YAMLNode>>;
 	using YAMLScalar = std::string;
 
+	// YAML ドキュメント内のノード(スカラー値、シーケンス、マップ)を表します。
 	class YAMLNode
 	{
 	public:
+		// YAMLノードのタイプを定義します。
 		enum class Type
 		{
 			Scalar,
 			Sequence,
 			Map
 		};
+
+		// マルチラインスカラーのタイプを定義します。
 		enum class MultilineType
 		{
 			None,
@@ -42,16 +46,16 @@ public:
 		YAMLNode(YAMLSeq val) : type(Type::Sequence), value(val), multilineType(MultilineType::None) {}
 		YAMLNode(YAMLMap val) : type(Type::Map), value(val), multilineType(MultilineType::None) {}
 
-		Type type;
-		std::variant<YAMLScalar, YAMLSeq, YAMLMap> value;
-		MultilineType multilineType = MultilineType::None;
+		Type type;	// ノードのタイプ
+		std::variant<YAMLScalar, YAMLSeq, YAMLMap> value;	// ノードの値
+		MultilineType multilineType = MultilineType::None;	// マルチラインスカラーのタイプ
 	};
 
 	/// <summary>
 	/// 指定されたファイルパスからYAMLファイルを読み込み、パースします。
 	/// </summary>
 	/// <param name="In_FilePath">読み込むYAMLファイルのパス。</param>
-	inline void ParseYAML(_In_ const std::string& In_FilePath)
+	void ParseYAML(_In_ const std::string& In_FilePath)
 	{
 		if (In_FilePath.empty()) return;
 
@@ -316,6 +320,7 @@ public:
 
 private:
 
+	// YAMLデータを保持するメンバー変数
 	YAMLNode m_YAMLData = YAMLNode(YAMLMap{});
 
 	/// <summary>
@@ -323,7 +328,7 @@ private:
 	/// </summary>
 	/// <param name="In_Node">表示するYAMLノードへの共有ポインタ。</param>
 	/// <param name="In_IndentDepth">現在のインデント幅（スペース数）。デフォルトは0。</param>
-	static inline void Print_YAML(_In_ const std::shared_ptr<YAMLNode>& In_Node, _In_ const int& In_IndentDepth = 0)
+	static void Print_YAML(_In_ const std::shared_ptr<YAMLNode>& In_Node, _In_ const int& In_IndentDepth = 0)
 	{
 		if (!In_Node) return;
 		const std::string strIndent(In_IndentDepth, ' ');
@@ -387,7 +392,7 @@ private:
 		}
 	}
 
-	static inline void WriteYAMLNode(std::ostream& Out_OStream, _In_ const YAMLNode& In_YAMLNode, _In_ const int& In_IndentDepth)
+	static void WriteYAMLNode(std::ostream& Out_OStream, _In_ const YAMLNode& In_YAMLNode, _In_ const int& In_IndentDepth)
 	{
 		const std::string strIndent(In_IndentDepth, ' ');
 		switch (In_YAMLNode.type)
@@ -500,12 +505,17 @@ private:
 		return nullptr;
 	}
 
+	/// YAMLファイルの行を管理し、現在の位置を追跡します。
 	struct YAMLLines
 	{
-		std::vector<std::string> lines;
-		size_t currentPos = 0;
+		std::vector<std::string> lines;	// YAMLファイルの行を格納するベクター
+		size_t currentPos = 0;			// 現在の行位置を追跡するインデックス
+
+		// 現在の位置が行数を超えているかどうかを確認します。
 		inline bool eof() const noexcept { return currentPos >= lines.size(); }
+		// 現在の行位置を取得します。
 		inline void next() noexcept { ++currentPos; }
+		// 現在の行を取得します。
 		inline const std::string& peek() const { return lines[currentPos]; }
 	};
 
@@ -610,7 +620,7 @@ private:
 		return std::make_shared<YAMLNode>(trimmed);
 	}
 
-	static inline std::shared_ptr<YAMLNode> ParseMap(_Inout_ YAMLLines& In_YAMLLines, _In_ const size_t& In_CurrentIndent)
+	static std::shared_ptr<YAMLNode> ParseMap(_Inout_ YAMLLines& In_YAMLLines, _In_ const size_t& In_CurrentIndent)
 	{
 		YAMLMap map;
 		while (!In_YAMLLines.eof())
@@ -668,7 +678,7 @@ private:
 		return std::make_shared<YAMLNode>(map);
 	}
 
-	static inline std::shared_ptr<YAMLNode> ParseSeq(_Inout_ YAMLLines& In_YAMLLines, _In_ const size_t& In_CurrentIndent)
+	static std::shared_ptr<YAMLNode> ParseSeq(_Inout_ YAMLLines& In_YAMLLines, _In_ const size_t& In_CurrentIndent)
 	{
 		YAMLSeq seq;
 		while (!In_YAMLLines.eof())
