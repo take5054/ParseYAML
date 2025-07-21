@@ -252,6 +252,358 @@ public:
 	}
 
 	/// <summary>
+	/// 指定されたキー パスが存在するかどうかを判定します。
+	/// </summary>
+	/// <param name="In_keyPath">検索するキー パスを表す文字列。</param>
+	/// <returns>キー パスが存在する場合は true、存在しない場合は false を返します。</returns>
+	inline bool HasKey(_In_ const std::string& In_keyPath) const
+	{
+		return FindScalarByPath(In_keyPath) != nullptr;
+	}
+
+	/// <summary>
+	/// 指定されたキーのパスに従ってYAMLノードを検索し、見つかったノードの共有ポインタを返します。
+	/// </summary>
+	/// <param name="In_keyPath">ドット区切りの文字列で表されたYAMLノードへのパス。例: "root.child.key"</param>
+	/// <returns>パスで指定されたYAMLノードのstd::shared_ptr。ノードが見つからない場合はnullptrを返します。</returns>
+	inline std::shared_ptr<YAMLNode> GetNodeByPath(_In_ const std::string& In_keyPath) const
+	{
+		const YAMLNode* node = &m_YAMLData;
+		size_t pos = 0, next;
+		while (pos < In_keyPath.size())
+		{
+			next = In_keyPath.find('.', pos);
+			const std::string token = In_keyPath.substr(pos, next == std::string::npos ? std::string::npos : next - pos);
+			if (node->type == YAMLNode::Type::Map)
+			{
+				const auto& map = std::get<YAMLMap>(node->value);
+				auto itr = map.find(token);
+				if (itr == map.end()) return nullptr;
+				node = itr->second.get();
+			}
+			else if (node->type == YAMLNode::Type::Sequence)
+			{
+				if (!std::all_of(token.begin(), token.end(), ::isdigit)) return nullptr;
+				const size_t idx = std::stoul(token);
+				const auto& seq = std::get<YAMLSeq>(node->value);
+				if (idx >= seq.size()) return nullptr;
+				node = seq[idx].get();
+			}
+			else
+			{
+				return nullptr; // マップやシーケンスではない場合
+			}
+			if (next == std::string::npos) break;
+			pos = next + 1;
+		}
+		return std::make_shared<YAMLNode>(*node);
+	}
+
+	/// <summary>
+	/// 指定されたキーのパスに従ってYAMLデータ内のスカラー値を設定します。
+	/// </summary>
+	/// <param name="In_keyPath">設定対象の値のパス（ドット区切りの文字列）。</param>
+	/// <param name="In_Value">設定する文字列値。</param>
+	/// <returns>値の設定に成功した場合はtrue、失敗した場合はfalseを返します。</returns>
+	bool SetString(_In_ const std::string& In_keyPath, _In_ const std::string& In_Value)
+	{
+		if (In_keyPath.empty()) return false;
+		if (!HasKey(In_keyPath)) // キーパスが存在しない場合は新規に生成
+			GenerateNode(In_keyPath, YAMLNode::Type::Scalar);
+
+		YAMLNode* node = &m_YAMLData;
+		size_t pos = 0, next;
+		while (pos < In_keyPath.size())
+		{
+			next = In_keyPath.find('.', pos);
+			const std::string token = In_keyPath.substr(pos, next == std::string::npos ? std::string::npos : next - pos);
+			try
+			{
+				if (node->type == YAMLNode::Type::Map)
+				{
+					auto& map = std::get<YAMLMap>(node->value);
+					auto itr = map.find(token);
+					if (itr == map.end())
+					{
+						map[token] = std::make_shared<YAMLNode>(YAMLScalar{});
+						itr = map.find(token);
+					}
+					node = itr->second.get();
+				}
+				else if (node->type == YAMLNode::Type::Sequence)
+				{
+					if (!std::all_of(token.begin(), token.end(), ::isdigit))
+					{
+						std::cerr << "SetString: シーケンスノードに数値以外のインデックス指定がされました: " << token << std::endl;
+						return false;
+					}
+					const size_t idx = std::stoul(token);
+					auto& seq = std::get<YAMLSeq>(node->value);
+					if (idx >= seq.size())
+					{
+						std::cerr << "SetString: シーケンスインデックスが範囲外です: " << idx << std::endl;
+						return false;
+					}
+					node = seq[idx].get();
+				}
+				else
+				{
+					std::cerr << "SetString: ノード型がMapでもSequenceでもありません。" << std::endl;
+					return false;
+				}
+			}
+			catch (const std::bad_variant_access& e)
+			{
+				std::cerr << "SetString: ノード型とvalueのvariant型が一致しません: " << e.what() << std::endl;
+				return false;
+			}
+			catch (const std::exception& e)
+			{
+				std::cerr << "SetString: 例外発生: " << e.what() << std::endl;
+				return false;
+			}
+			if (next == std::string::npos) break;
+			pos = next + 1;
+		}
+		if (node->type != YAMLNode::Type::Scalar)
+		{
+			std::cerr << "SetString: 最終ノード型がScalarではありません。" << std::endl;
+			return false;
+		}
+		try
+		{
+			node->value = In_Value; // 値を設定
+		}
+		catch (const std::bad_variant_access& e)
+		{
+			std::cerr << "SetString: 値設定時にvariant型不一致: " << e.what() << std::endl;
+			return false;
+		}
+		catch (const std::exception& e)
+		{
+			std::cerr << "SetString: 値設定時に例外発生: " << e.what() << std::endl;
+			return false;
+		}
+		return true;
+	}
+
+	/// <summary>
+	/// 指定されたキーに整数値を設定します。
+	/// </summary>
+	/// <param name="In_keyPath">値を設定するキーのパス。</param>
+	/// <param name="In_Value">設定する整数値。</param>
+	/// <returns>値の設定が成功した場合は true、失敗した場合は false を返します。</returns>
+	/// <summary>
+	/// 指定されたキーに整数値を設定します。
+	/// </summary>
+	/// <param name="In_keyPath">値を設定するキーのパス。</param>
+	/// <param name="In_Value">設定する整数値。</param>
+	/// <returns>値の設定が成功した場合は true、失敗した場合は false を返します。</returns>
+	inline bool SetInt(_In_ const std::string& In_keyPath, _In_ const int& In_Value)
+	{
+		return SetString(In_keyPath, std::to_string(In_Value));
+	}
+
+	/// <summary>
+	/// 指定されたキーに対して真偽値を設定します。
+	/// </summary>
+	/// <param name="In_keyPath">値を設定する対象のキーのパス。</param>
+	/// <param name="In_Value">設定する真偽値。true または false。</param>
+	/// <returns>値の設定が成功した場合は true、失敗した場合は false を返します。</returns>
+	inline bool SetBool(_In_ const std::string& In_keyPath, _In_ const bool& In_Value)
+	{
+		return SetString(In_keyPath, In_Value ? "true" : "false");
+	}
+
+	/// <summary>
+	/// 指定されたキーに対応する値として、float型の値を文字列として設定します。
+	/// </summary>
+	/// <param name="In_keyPath">値を設定する対象のキーのパス。</param>
+	/// <param name="In_Value">設定するfloat型の値。</param>
+	/// <returns>値の設定が成功した場合はtrue、失敗した場合はfalseを返します。</returns>
+	inline bool SetFloat(_In_ const std::string& In_keyPath, _In_ const float& In_Value)
+	{
+		return SetString(In_keyPath, std::to_string(In_Value));
+	}
+
+	/// <summary>
+	/// 指定されたキーに対応する値として double 型の値を設定します。
+	/// </summary>
+	/// <param name="In_keyPath">値を設定する対象のキーのパス。</param>
+	/// <param name="In_Value">設定する double 型の値。</param>
+	/// <returns>値の設定が成功した場合は true、失敗した場合は false を返します。</returns>
+	inline bool SetDouble(_In_ const std::string& In_keyPath, _In_ const double& In_Value)
+	{
+		return SetString(In_keyPath, std::to_string(In_Value));
+	}
+
+	/// <summary>
+	/// 指定されたパスに従ってYAMLノードを検索し、その値を設定します。
+	/// </summary>
+	/// <param name="In_keyPath">ノードを検索するためのドット区切りのキー文字列。</param>
+	/// <param name="In_Node">設定する値を持つYAMLノードへの共有ポインタ。</param>
+	/// <returns>値の設定が成功した場合はtrue、失敗した場合はfalseを返します。</returns>
+	bool SetNodeByPath(_In_ const std::string& In_keyPath, _In_ const std::shared_ptr<YAMLNode>& In_Node)
+	{
+		YAMLNode* node = &m_YAMLData;
+		size_t pos = 0, next;
+		while (pos < In_keyPath.size())
+		{
+			next = In_keyPath.find('.', pos);
+			const std::string token = In_keyPath.substr(pos, next == std::string::npos ? std::string::npos : next - pos);
+			if (node->type == YAMLNode::Type::Map)
+			{
+				auto& map = std::get<YAMLMap>(node->value);
+				auto itr = map.find(token);
+				if (itr == map.end())
+				{
+					map[token] = std::make_shared<YAMLNode>(YAMLScalar{});
+					itr = map.find(token);
+				}
+				node = itr->second.get();
+			}
+			else if (node->type == YAMLNode::Type::Sequence)
+			{
+				if (!std::all_of(token.begin(), token.end(), ::isdigit)) return false;
+				const size_t idx = std::stoul(token);
+				auto& seq = std::get<YAMLSeq>(node->value);
+				if (idx >= seq.size())
+				{
+					return false; // インデックスが範囲外
+				}
+				node = seq[idx].get();
+			}
+			else
+			{
+				return false; // マップやシーケンスではない場合
+			}
+			if (next == std::string::npos) break;
+			pos = next + 1;
+		}
+		if (node->type != YAMLNode::Type::Map && node->type != YAMLNode::Type::Sequence) return false; // 最終ノードがマップやシーケンスでない場合
+		node->value = In_Node->value; // 値を設定
+		node->type = In_Node->type;
+		node->multilineType = In_Node->multilineType;
+		return true;
+	}
+
+	/// <summary>
+	/// 指定されたキーのパスに従ってYAMLノードを生成し、ノードの型と複数行タイプを設定します。
+	/// </summary>
+	/// <param name="In_keyPath">ノードを生成するためのドット区切りのキーのパス。</param>
+	/// <param name="In_Type">生成するノードの型。</param>
+	/// <param name="In_MultilineType">ノードの複数行タイプ。省略時はNone。</param>
+	void GenerateNode(_In_ const std::string& In_keyPath, _In_ const YAMLNode::Type& In_Type,
+		_In_ const YAMLNode::MultilineType& In_MultilineType = YAMLNode::MultilineType::None)
+	{
+		YAMLNode* node = &m_YAMLData;
+		size_t pos = 0, next;
+		while (pos < In_keyPath.size())
+		{
+			next = In_keyPath.find('.', pos);
+			const std::string token = In_keyPath.substr(pos, next == std::string::npos ? std::string::npos : next - pos);
+
+			try
+			{
+				// マップの場合
+				if (node->type == YAMLNode::Type::Map)
+				{
+					auto& map = std::get<YAMLMap>(node->value);
+					auto itr = map.find(token);
+					if (itr == map.end())
+					{
+						// 最後のトークンなら指定された型で生成
+						if (next == std::string::npos)
+						{
+							switch (In_Type)
+							{
+							case YAMLNode::Type::Scalar:
+								map[token] = std::make_shared<YAMLNode>(YAMLScalar{}, In_MultilineType);
+								break;
+							case YAMLNode::Type::Map:
+								map[token] = std::make_shared<YAMLNode>(YAMLMap{});
+								break;
+							case YAMLNode::Type::Sequence:
+								map[token] = std::make_shared<YAMLNode>(YAMLSeq{});
+								break;
+							}
+						}
+						else
+						{
+							// 途中ノードは必ずMapで生成
+							map[token] = std::make_shared<YAMLNode>(YAMLMap{});
+						}
+						itr = map.find(token);
+					}
+					node = itr->second.get();
+				}
+				// シーケンスの場合
+				else if (node->type == YAMLNode::Type::Sequence)
+				{
+					if (!std::all_of(token.begin(), token.end(), ::isdigit))
+						throw std::invalid_argument("YAML: シーケンスノードに数値以外のインデックス指定がされました: " + token);
+					const size_t idx = std::stoul(token);
+					auto& seq = std::get<YAMLSeq>(node->value);
+					// 足りない場合はMapで埋める
+					while (seq.size() <= idx)
+					{
+						seq.push_back(std::make_shared<YAMLNode>(YAMLMap{}));
+					}
+					node = seq[idx].get();
+				}
+				else if (node->type == YAMLNode::Type::Scalar)
+				{
+					// 途中ノードがスカラーの場合は不正
+					if (next != std::string::npos)
+						throw std::logic_error("YAML: スカラーノードの下に子ノードを生成することはできません: " + token);
+
+					node->type = In_Type;
+					node->multilineType = In_MultilineType;
+					switch (In_Type)
+					{
+					case YAMLNode::Type::Scalar:
+						node->value = YAMLScalar{};
+						break;
+					case YAMLNode::Type::Map:
+						node->value = YAMLMap{};
+						break;
+					case YAMLNode::Type::Sequence:
+						node->value = YAMLSeq{};
+						break;
+					}
+					return;
+				}
+				else
+				{
+					throw std::logic_error("YAML: 未知のノード型です");
+				}
+			}
+			catch (const std::bad_variant_access& e)
+			{
+				std::cerr << "YAML: ノード型とvalueのvariant型が一致しません: " << e.what() << std::endl;
+				return;
+			}
+			catch (const std::exception& e)
+			{
+				std::cerr << "YAML: 例外発生: " << e.what() << std::endl;
+				return;
+			}
+			catch (...)
+			{
+				std::cerr << "YAML: 不明な例外が発生しました。" << std::endl;
+				return;
+			}
+
+			if (next == std::string::npos) break;
+			// 次のトークンへ進む
+			pos = next + 1;
+		}
+		// 最終ノードの型とマルチラインタイプを設定
+		node->type = In_Type;
+		node->multilineType = In_MultilineType;
+	}
+
+	/// <summary>
 	/// YAMLノードの内容をインデント付きで標準出力に表示します。
 	/// </summary>
 	/// <param name="In_IndentDepth">出力時のインデント幅（スペース数）。デフォルトは0です。</param>

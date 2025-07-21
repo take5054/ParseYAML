@@ -110,4 +110,19 @@ anchors_and_aliases:
     color: red
     price: 1500
 
+new:
+  node:
+    test2: V‚µ‚¢ƒm[ƒh‚Ì’Ç‰Á
+    test: true
+
+admins:
+  -
+    name: admin1
+    age: 30
+    role: superuser
+  -
+    name: admin2
+    age: 28
+    role: moderator
+
 
