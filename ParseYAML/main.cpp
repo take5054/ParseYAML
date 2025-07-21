@@ -17,6 +17,9 @@ int main()
 	std::cout << "users.0.name: " << yaml->GetString("users.0.name") << std::endl;
 	std::cout << "users.1.age: " << yaml->GetInt("users.1.profile.age") << std::endl;
 	std::cout << "ここまで深くなる: " << yaml->GetString("deep_nest.level1.level2.level3.level4") << std::endl;
+	std::cout << "nullmozi" << yaml->GetString("anchors_and_aliases.product2.price") << std::endl;
+
+	yaml->SaveYAML("OutputTestData.yaml");
 
 	yaml.reset();
 

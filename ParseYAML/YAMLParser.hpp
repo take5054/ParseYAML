@@ -30,13 +30,21 @@ public:
 			Sequence,
 			Map
 		};
+		enum class MultilineType
+		{
+			None,
+			Literal,   // |
+			Folded     // >
+		};
 
-		YAMLNode(YAMLScalar val) : type(Type::Scalar), value(val) {}
-		YAMLNode(YAMLSeq val) : type(Type::Sequence), value(val) {}
-		YAMLNode(YAMLMap val) : type(Type::Map), value(val) {}
+		YAMLNode(YAMLScalar val, MultilineType mtype = MultilineType::None)
+			: type(Type::Scalar), value(val), multilineType(mtype) {}
+		YAMLNode(YAMLSeq val) : type(Type::Sequence), value(val), multilineType(MultilineType::None) {}
+		YAMLNode(YAMLMap val) : type(Type::Map), value(val), multilineType(MultilineType::None) {}
 
 		Type type;
 		std::variant<YAMLScalar, YAMLSeq, YAMLMap> value;
+		MultilineType multilineType = MultilineType::None;
 	};
 
 	/// <summary>
@@ -102,6 +110,31 @@ public:
 			topMap[key] = std::make_shared<YAMLNode>(TrimLeftWhitespace(trimmed.substr(colon_pos + 1)));
 		}
 		m_YAMLData = YAMLNode(topMap);
+	}
+
+	/// <summary>
+	/// 指定されたファイルパスにYAMLデータを保存します。
+	/// </summary>
+	/// <param name="In_FilePath">保存先のファイルパスを指定します。</param>
+	/// <returns>保存に成功した場合は true、失敗した場合は false を返します。</returns>
+	inline bool SaveYAML(_In_ const std::string& In_FilePath) const
+	{
+		if (In_FilePath.empty()) return false;
+		std::ofstream ofs(In_FilePath, std::ios::binary);
+		if (!ofs)
+		{
+			std::cerr << "ファイルを保存できません: " << In_FilePath << std::endl;
+			return false;
+		}
+
+		WriteYAMLNode(ofs, m_YAMLData, 0);
+
+		if (!ofs)
+		{
+			std::cerr << "ファイル書き込みエラー: " << In_FilePath << std::endl;
+			return false;
+		}
+		return true;
 	}
 
 	/// <summary>
@@ -354,6 +387,81 @@ private:
 		}
 	}
 
+	static inline void WriteYAMLNode(std::ostream& Out_OStream, _In_ const YAMLNode& In_YAMLNode, _In_ const int& In_IndentDepth)
+	{
+		const std::string strIndent(In_IndentDepth, ' ');
+		switch (In_YAMLNode.type)
+		{
+		case YAMLNode::Type::Scalar:
+			WriteScalar(Out_OStream, std::get<YAMLScalar>(In_YAMLNode.value),
+				In_YAMLNode.multilineType, In_IndentDepth);
+			break;
+		case YAMLNode::Type::Sequence:
+			for (const auto& seqNode : std::get<YAMLSeq>(In_YAMLNode.value))
+			{
+				Out_OStream << strIndent << "-";
+				if (seqNode->type == YAMLNode::Type::Scalar)
+				{
+					WriteScalar(Out_OStream, std::get<YAMLScalar>(seqNode->value),
+						seqNode->multilineType, In_IndentDepth + 2);
+				}
+				else
+				{
+					Out_OStream << "\n";
+					WriteYAMLNode(Out_OStream, *seqNode, In_IndentDepth + 2);
+				}
+			}
+			break;
+		case YAMLNode::Type::Map:
+			for (const auto& keyValue : std::get<YAMLMap>(In_YAMLNode.value))
+			{
+				Out_OStream << strIndent << keyValue.first << ":";
+				if (keyValue.second->type == YAMLNode::Type::Scalar)
+				{
+					WriteScalar(Out_OStream, std::get<YAMLScalar>(keyValue.second->value),
+						keyValue.second->multilineType, In_IndentDepth + 2);
+				}
+				else
+				{
+					Out_OStream << "\n";
+					WriteYAMLNode(Out_OStream, *keyValue.second, In_IndentDepth + 2);
+				}
+			}
+			break;
+		default:
+			break;
+		}
+
+		// インデント深度が2以下の場合(一番大きな項目が分かれる)
+		if (In_IndentDepth <= 2) Out_OStream << "\n"; // 最後に改行を追加
+	}
+
+	static inline void WriteScalar(std::ostream& Out_OStream, _In_ const std::string& In_Scalar,
+		_In_ const YAMLNode::MultilineType& In_MultilineType, _In_ const int& In_IndentDepth)
+	{
+		const std::string strIndent(In_IndentDepth, ' ');
+		if (In_MultilineType == YAMLNode::MultilineType::Literal)
+		{
+			Out_OStream << " |\n";
+			std::istringstream iss(In_Scalar);
+			std::string line;
+			while (std::getline(iss, line))
+				Out_OStream << strIndent << line << "\n";
+		}
+		else if (In_MultilineType == YAMLNode::MultilineType::Folded)
+		{
+			Out_OStream << " >\n";
+			std::istringstream iss(In_Scalar);
+			std::string line;
+			while (std::getline(iss, line))
+				Out_OStream << strIndent << line << "\n";
+		}
+		else
+		{
+			Out_OStream << " " << In_Scalar << "\n";
+		}
+	}
+
 	inline const YAMLScalar* FindScalarByPath(_In_ const std::string& In_KeyPath) const
 	{
 		const YAMLNode* node = &m_YAMLData;
@@ -535,7 +643,8 @@ private:
 			if (val == "|" || val == ">")
 			{
 				std::string multi = ParseMultilineScalar(In_YAMLLines, In_CurrentIndent + 2);
-				map[key] = std::make_shared<YAMLNode>(multi);
+				YAMLNode::MultilineType mtype = (val == "|") ? YAMLNode::MultilineType::Literal : YAMLNode::MultilineType::Folded;
+				map[key] = std::make_shared<YAMLNode>(multi, mtype);
 				continue;
 			}
 

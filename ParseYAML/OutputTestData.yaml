@@ -1,41 +1,62 @@
-# ã„ã‚ã‚“ãªè¦ç´ ãŒæ··ã–ã£ãŸYAMLè¤‡é›‘ãƒ†ã‚¹ãƒˆãƒ‡ãƒ¼ã‚¿
 users:
-  - id: 1
-    name: "Alice"
-    active: true
-    tags: [admin, tester, "æ—¥æœ¬èªã‚¿ã‚°"]
+  -
+    tags: [admin, tester, "“ú–{Œêƒ^ƒO"]
+    id: 1
     profile:
       age: 32
       address:
         city: "Tokyo"
         zip: "100-0001"
+    name: "Alice"
     projects:
-      - name: "YAML Parser"
+      -
         roles: ["dev", "doc"]
-      - name: "AI Bot"
+        name: "YAML Parser"
+      -
         roles: []
+        name: "AI Bot"
+    active: true
     memo: null
-  - id: 2
-    name: "Bob"
-    active: false
+  -
     tags: []
+    id: 2
     profile:
       age: 28
       address: null
+    name: "Bob"
     projects: []
+    active: false
     memo: ""
-  - id: 3
-    name: null
-    active: true
+  -
     tags:
       - "special"
       - "guest"
+    id: 3
     profile: ~
+    name: null
     projects:
-      - name: "Test"
+      -
         roles:
           - "reviewer"
-    memo: "æ”¹è¡Œã‚‚\nå…¥ã‚‹"
+        name: "Test"
+    active: true
+    memo: "‰üs‚à\n“ü‚é"
+
+empty_map: {}
+empty_list: []
+mixed:
+  - just_scalar
+  - [1, 2, 3]
+  -
+    {foo: "bar", baz: 42}
+  -
+  -
+    submap:
+      - sublistitem1
+      - sublistitem2
+  - null
+  - ~
+  - ""
 
 settings:
   theme: "dark"
@@ -53,9 +74,6 @@ settings:
       beta: true
       legacy: false
 
-empty_list: []
-empty_map: {}
-
 matrix:
   - [1, 2, 3]
   - [4, 5, 6]
@@ -65,44 +83,31 @@ deep_nest:
   level1:
     level2:
       level3:
-        level4: "ã“ã“ã¾ã§æ·±ããªã‚‹"
-
-mixed:
-  - just_scalar
-  - [1, 2, 3]
-  - {foo: "bar", baz: 42}
-  - 
-    - nested_list1
-    - nested_list2
-  - 
-    submap: 
-      - sublistitem1
-      - sublistitem2
-  - null
-  - ~
-  - ""
+        level4: "‚±‚±‚Ü‚Å[‚­‚È‚é"
 
 special_cases:
   colon_in_string: "value:with:colon"
-  hash_in_string: "value#notacomment"
   quoted_number: "0123"
+  hash_in_string: "value#notacomment"
   multiline: |
-    ã“ã‚Œã¯
-    è¤‡æ•°è¡Œ
-    ãƒ†ã‚­ã‚¹ãƒˆã ã‚ˆ
+    ‚±‚ê‚Í
+    •¡”s
+    ƒeƒLƒXƒg‚¾‚æ
   folded: >
-    ã“ã‚Œã¯
-    æŠ˜ã‚ŠãŸãŸã¿
-    ãƒ†ã‚­ã‚¹ãƒˆã ã‚ˆ
+    ‚±‚ê‚Í
+    Ü‚è‚½‚½‚İ
+    ƒeƒLƒXƒg‚¾‚æ
 
 anchors_and_aliases:
-  defaults: &defaults
-    color: blue
-    size: L
   product1:
     <<: *defaults
     price: 1200
+  defaults:
+    color: blue
+    size: L
   product2:
     <<: *defaults
     color: red
     price: 1500
+
+
