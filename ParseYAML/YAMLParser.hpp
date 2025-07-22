@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cctype>
 #include <charconv>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <memory>
@@ -55,15 +56,16 @@ public:
 	/// 指定されたファイルパスからYAMLファイルを読み込み、パースします。
 	/// </summary>
 	/// <param name="In_FilePath">読み込むYAMLファイルのパス。</param>
-	void ParseYAML(_In_ const std::string& In_FilePath)
+	/// <returns>パースに成功した場合は true、失敗した場合は false を返します。</returns>
+	bool ParseYAML(_In_ const std::string& In_FilePath)
 	{
-		if (In_FilePath.empty()) return;
+		if (In_FilePath.empty()) return false;
 
 		std::ifstream ifs(In_FilePath, std::ios::binary);
 		if (!ifs)
 		{
 			std::cerr << "ファイルを開けません: " << In_FilePath << std::endl;
-			return;
+			return false;
 		}
 
 		// データの読み込み
@@ -114,6 +116,7 @@ public:
 			topMap[key] = std::make_shared<YAMLNode>(TrimLeftWhitespace(trimmed.substr(colon_pos + 1)));
 		}
 		m_YAMLData = YAMLNode(topMap);
+		return true;
 	}
 
 	/// <summary>
@@ -124,6 +127,22 @@ public:
 	inline bool SaveYAML(_In_ const std::string& In_FilePath) const
 	{
 		if (In_FilePath.empty()) return false;
+
+		try
+		{
+			std::filesystem::path filePath(In_FilePath);
+			std::filesystem::path dirPath = filePath.parent_path();
+			if (!dirPath.empty() && !std::filesystem::exists(dirPath))
+			{
+				std::filesystem::create_directories(dirPath);
+			}
+		}
+		catch (const std::exception& e)
+		{
+			std::cerr << "ディレクトリ作成失敗: " << e.what() << std::endl;
+			return false;
+		}
+
 		std::ofstream ofs(In_FilePath, std::ios::binary);
 		if (!ofs)
 		{
