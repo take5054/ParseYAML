@@ -277,7 +277,42 @@ public:
 	/// <returns>キー パスが存在する場合は true、存在しない場合は false を返します。</returns>
 	inline bool HasKey(_In_ const std::string& In_keyPath) const
 	{
-		return FindScalarByPath(In_keyPath) != nullptr;
+		if (In_keyPath.empty()) return false;
+		const YAMLNode* node = &m_YAMLData;
+		size_t pos = 0, next;
+		while (pos < In_keyPath.size())
+		{
+			next = In_keyPath.find('.', pos);
+			const std::string token = In_keyPath.substr(pos, next == std::string::npos ? std::string::npos : next - pos);
+			if (node->type == YAMLNode::Type::Map)
+			{
+				const auto& map = std::get<YAMLMap>(node->value);
+				auto itr = map.find(token);
+				if (itr == map.end()) return false;
+				node = itr->second.get();
+			}
+			else if (node->type == YAMLNode::Type::Sequence)
+			{
+				if (!std::all_of(token.begin(), token.end(), ::isdigit)) return false;
+				const size_t idx = std::stoul(token);
+				const auto& seq = std::get<YAMLSeq>(node->value);
+				if (idx >= seq.size()) return false;
+				node = seq[idx].get();
+			}
+			else if (node->type == YAMLNode::Type::Scalar)
+			{
+				// スカラー値の場合、キー パスの最後の部分が空でないことを確認
+				if (token.empty()) return true;
+				return false;
+			}
+			else
+			{
+				return false;
+			}
+			if (next == std::string::npos) break;
+			pos = next + 1;
+		}
+		return true;
 	}
 
 	/// <summary>
