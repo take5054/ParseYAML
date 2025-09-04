@@ -167,6 +167,54 @@ public:
 	inline YAMLNode GetYAMLData() const noexcept { return m_YAMLData; }
 
 	/// <summary>
+	/// 指定されたキーのパスに対応するYAMLノードの内容を文字列として取得します。
+	/// </summary>
+	/// <param name="In_keyPath">YAMLノードを検索するためのキーのパス（文字列）。</param>
+	/// <returns>見つかったノードの内容を文字列で返します。スカラーの場合はその値、シーケンスやマップの場合は要素をカンマ区切りで連結した文字列です。ノードが見つからない場合や複雑なノードの場合は空文字列または[Complex Node]を返します。</returns>
+	inline std::string GetYAMLString(_In_ const std::string& In_keyPath) const noexcept
+	{
+		const YAMLNode* node = FindNodeByPath(In_keyPath);
+		return GetYAMLStringFromNode(node);
+	}
+
+	inline YAMLNode* FindNodeByPath(_In_ const std::string& In_keyPath) const
+	{
+		const YAMLNode* currentNode = &m_YAMLData;
+		std::istringstream iss(In_keyPath);
+		std::string token;
+		while (std::getline(iss, token, '.'))
+		{
+			if (currentNode->type == YAMLNode::Type::Map)
+			{
+				const YAMLMap& map = std::get<YAMLMap>(currentNode->value);
+				auto it = map.find(token);
+				if (it == map.end()) return nullptr;
+				currentNode = it->second.get();
+			}
+			else if (currentNode->type == YAMLNode::Type::Sequence)
+			{
+				const YAMLSeq& seq = std::get<YAMLSeq>(currentNode->value);
+				size_t index = 0;
+				try
+				{
+					index = std::stoul(token);
+				}
+				catch (const std::exception&)
+				{
+					return nullptr;
+				}
+				if (index >= seq.size()) return nullptr;
+				currentNode = seq[index].get();
+			}
+			else
+			{
+				return nullptr;
+			}
+		}
+		return const_cast<YAMLNode*>(currentNode);
+	}
+
+	/// <summary>
 	/// キーパスで文字列値を取得
 	/// </summary>
 	/// <param name="In_keyPath">YAML内のキーのパス（ドット区切り）。例: "users.0.name"</param>
@@ -728,6 +776,44 @@ private:
 
 	// YAMLデータを保持するメンバー変数
 	YAMLNode m_YAMLData = YAMLNode(YAMLMap{});
+
+	/// <summary>
+	/// YAMLノードから文字列表現を取得します。
+	/// </summary>
+	/// <param name="node">YAMLノードへのポインタ。変換対象のノードを指定します。</param>
+	/// <returns>ノードのYAML内容を表す文字列。ノードがnullptrの場合は空文字列を返します。</returns>
+	inline std::string GetYAMLStringFromNode(_In_ const YAMLNode* node) const noexcept
+	{
+		if (!node) return "";
+		if (node->type == YAMLNode::Type::Scalar)
+		{
+			return std::get<YAMLScalar>(node->value);
+		}
+		else if (node->type == YAMLNode::Type::Sequence)
+		{
+			const YAMLSeq& seq = std::get<YAMLSeq>(node->value);
+			std::string result;
+			for (size_t i = 0; i < seq.size(); ++i)
+			{
+				if (i > 0) result += ", ";
+				result += GetYAMLStringFromNode(seq[i].get());
+			}
+			return "[" + result + "]";
+		}
+		else if (node->type == YAMLNode::Type::Map)
+		{
+			const YAMLMap& map = std::get<YAMLMap>(node->value);
+			std::string result;
+			size_t count = 0;
+			for (const auto& [key, val] : map)
+			{
+				if (count++ > 0) result += ", ";
+				result += key + ": " + GetYAMLStringFromNode(val.get());
+			}
+			return "{" + result + "}";
+		}
+		return "";
+	}
 
 	/// <summary>
 	/// YAMLノードを標準出力にインデント付きで再帰的に表示します。
